@@ -14,7 +14,6 @@ def load_experiment(experiment_dir):
     priors = pd.read_csv(os.path.join(experiment_dir, 'priors.csv'))
 
 
-
 if __name__ == "__main__":
     experiment_path = 'experiment_data/'
     for dir in os.listdir(experiment_path):
