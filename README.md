@@ -2,7 +2,6 @@
 ## Choice vs. No Choice in E-Learning Environment
 #### Sirut Buasai, sbuasai2@wpi.edu; Christopher Guerrette, cjgourrette@wpi.edu; Conor McKevitt, cmmckevitt@wpi.edu
 
-
 ### Data Gathering process
 1. Load datasets
 2. Perform a baseline test on whether choice/no-choice has an impact
