@@ -19,15 +19,24 @@ def load_experiment(experiment_dir):
 
     return data
 
-def get_percentile_data(data):
-        dropna = data["priors"]['student_prior_average_correctness'].dropna()
-        values = dropna.to_numpy()
-        return np.percentile(values, [0, 25, 50, 75, 100])
+def get_percentile_data(allData):
+    listOfFrames = []
+    for data in list(allData.values()):
+        listOfFrames.append(data['priors'])
+
+    concatFrame = pd.concat(listOfFrames, keys=['student_id', 'student_prior_average_correctness'])
+    concatFrame.drop_duplicates(subset='student_id', inplace=True)
+    concatFrame.dropna(inplace=True)
+    values = concatFrame['student_prior_average_correctness'].to_numpy()
+    return np.percentile(values, [0, 25, 50, 75, 100])
 
 if __name__ == "__main__":
     experiment_path = 'experiment_data/'
+    allData = {}
+
     for dir in os.listdir(experiment_path):
         exp_dir = os.path.join(experiment_path, dir)
         data = load_experiment(exp_dir)
+        allData[exp_dir] = data
 
-        print(f"Experiment: {exp_dir} percentile values (0, 25, 50, 75, 100): {get_percentile_data(data)}")
+    print(f"Total Experiments percentile values (0, 25, 50, 75, 100): {get_percentile_data(allData)}")
