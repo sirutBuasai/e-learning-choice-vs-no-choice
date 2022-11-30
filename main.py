@@ -3,11 +3,12 @@ import os
 # External libraries
 import pandas as pd
 import numpy as np
+from scipy.stats import pearsonr
 from statsmodels.stats.weightstats import ttest_ind
 
 #High and Low knowledge constants
-lowKnowledge = 0.55366019
-highKnowledge = 0.78819488
+lowKnowledgeBoundary = 0.55366019
+highKnowledgeBoundary = 0.78819488
 
 def get_dependent_variable(id):
     match id:
@@ -73,20 +74,103 @@ def per_experiment_tests(data, id):
     treatment = data["alogs"][data['alogs']['assigned_condition'].str.contains("Treatment")][get_dependent_variable(id)]
     treatment = treatment.dropna()
   
-    results = ttest_ind(control, treatment)
-    print(f'p-value for experiment {id}: {results[1]}')
+    baseline_meanDifference = np.mean(treatment) - np.mean(control)
+    basline_pvalue = ttest_ind(control, treatment)[1]
+
+    print(f'mean difference for baseline: {baseline_meanDifference}')
+    print(f'p-value for baseline: {basline_pvalue}')
 
     #Seperate into covariate groups (high/low knowledge, oz and no oz zone)
 
+        #Lambda helper functions
+    def highKnowledgeLabel(id, highKnowledgeIDList):
+        if id in highKnowledgeIDList:
+            return 1
+        else:
+            return 0
+
+    def lowKnowledgeLabel(id, lowKnowledgeIDList):
+        if id in lowKnowledgeIDList:
+            return 1
+        else:
+            return 0
+
+    def opportunityZoneLabel(id, opportunityZoneIDs):
+        if id in opportunityZoneIDs:
+            return 1
+        else:
+            return 0
+
+    highKnowledgeStudentIDs = data["priors"][data["priors"]['student_prior_average_correctness'] >= highKnowledgeBoundary]['student_id']
+    highKnowledgeStudentIDs = highKnowledgeStudentIDs.dropna().to_numpy()
+    data["alogs"]['highKnowledge'] = data["alogs"]['student_id'].apply(lambda id: highKnowledgeLabel(id, highKnowledgeStudentIDs))
+    highKnowledgeControl = data["alogs"].loc[(data["alogs"]['assigned_condition'].str.contains("Control")) & (data["alogs"]['highKnowledge'] == 1)][get_dependent_variable(id)].dropna()
+    highKnowledgeTreatment = data["alogs"].loc[(data["alogs"]['assigned_condition'].str.contains("Treatment")) & (data["alogs"]['highKnowledge'] == 1)][get_dependent_variable(id)].dropna()
+
+
+    lowKnowledgeStudentIDs = data["priors"][data["priors"]['student_prior_average_correctness'] <= lowKnowledgeBoundary]['student_id']
+    lowKnowledgeStudentIDs = lowKnowledgeStudentIDs.dropna().to_numpy()
+    data["alogs"]['lowKnowledge'] = data["alogs"]['student_id'].apply(lambda id: lowKnowledgeLabel(id, lowKnowledgeStudentIDs))
+    lowKnowledgeControl = data["alogs"].loc[(data["alogs"]['assigned_condition'].str.contains("Control")) & (data["alogs"]['lowKnowledge'] == 1)][get_dependent_variable(id)].dropna()
+    lowKnowledgeTreatment = data["alogs"].loc[(data["alogs"]['assigned_condition'].str.contains("Treatment")) & (data["alogs"]['lowKnowledge'] == 1)][get_dependent_variable(id)].dropna()
+
+
+    opportunityZoneStudentIDs = data["priors"][data["priors"]['opportunity_zone'] == "Yes"]['student_id']
+    opportunityZoneStudentIDs = opportunityZoneStudentIDs.dropna().to_numpy()
+    data["alogs"]['opportunityZone'] = data["alogs"]['student_id'].apply(lambda id: opportunityZoneLabel(id, opportunityZoneStudentIDs))
+
+    opportunityZoneControl = data["alogs"].loc[(data["alogs"]['assigned_condition'].str.contains("Control")) & (data["alogs"]['opportunityZone'] == 1)][get_dependent_variable(id)].dropna()
+    opportunityZoneTreatment = data["alogs"].loc[(data["alogs"]['assigned_condition'].str.contains("Treatment")) & (data["alogs"]['opportunityZone'] == 1)][get_dependent_variable(id)].dropna()
+
+    nonOpportunityZoneControl = data["alogs"].loc[(data["alogs"]['assigned_condition'].str.contains("Control")) & (data["alogs"]['opportunityZone'] == 0)][get_dependent_variable(id)].dropna()
+    nonOpportunityZoneTreatment = data["alogs"].loc[(data["alogs"]['assigned_condition'].str.contains("Treatment")) & (data["alogs"]['opportunityZone'] == 0)][get_dependent_variable(id)].dropna()
+
     #Find correlation between covriate groups. If there is then just do the prior knowledge level tests
+    highKnowledgeLables = data["alogs"]['highKnowledge'].to_numpy()
+    lowKnowledgeLables = data["alogs"]['lowKnowledge'].to_numpy()
+    opportunityZoneLables = data["alogs"]['opportunityZone'].to_numpy()
+    correlation_highKnowledgeOpportunityZone, _ = pearsonr(highKnowledgeLables, opportunityZoneLables)
+    correlation_lowKnowledgeOpportunityZone, _ = pearsonr(lowKnowledgeLables, opportunityZoneLables)
+
+    print(f'Correlation for high knowledge and OZ: {correlation_highKnowledgeOpportunityZone}')
+    print(f'Correlation for low knowledge and OZ: {correlation_lowKnowledgeOpportunityZone}')
 
     #Perform two sample t-tests
+    highKnowledge_pvalue = ttest_ind(highKnowledgeControl, highKnowledgeTreatment)[1]
+    highKnowledge_meanDifference = np.mean(highKnowledgeControl.to_numpy()) - np.mean(highKnowledgeTreatment.to_numpy())
+    lowKnowledge_pvalue = ttest_ind(lowKnowledgeControl, lowKnowledgeTreatment)[1]
+    lowKnowledge_meanDifference = np.mean(lowKnowledgeControl.to_numpy()) - np.mean(lowKnowledgeTreatment.to_numpy())
+    opportunityZone_pvalue = ttest_ind(opportunityZoneControl, opportunityZoneTreatment)[1]
+    opportunityZone_meanDifference = np.mean(opportunityZoneControl.to_numpy()) - np.mean(opportunityZoneTreatment.to_numpy())
+    nonOpportunityZone_pvalue = ttest_ind(nonOpportunityZoneControl, nonOpportunityZoneTreatment)[1]
+    nonOpportunityZone_meanDifference = np.mean(nonOpportunityZoneControl.to_numpy()) - np.mean(nonOpportunityZoneTreatment.to_numpy())
+
+    print(f'Mean difference for High Knowledge: {highKnowledge_meanDifference}')
+    print(f'p-value for High Knowledge: {highKnowledge_pvalue}')
+    print(f'Mean difference for Low Knowledge: {lowKnowledge_meanDifference}')
+    print(f'p-value for Low Knowledge: {lowKnowledge_pvalue}')
+    print(f'Mean difference for Opportunity Zone: {opportunityZone_meanDifference}')
+    print(f'p-value for Opportunity Zone: {opportunityZone_pvalue}')
+    print(f'Mean difference Non Opportunity Zone: {nonOpportunityZone_meanDifference}')
+    print(f'p-value for Non Opportunity Zone: {nonOpportunityZone_pvalue}')
 
     #Report p-values in table
+    return [id,
+    baseline_meanDifference, basline_pvalue, correlation_highKnowledgeOpportunityZone, correlation_lowKnowledgeOpportunityZone,
+    highKnowledge_meanDifference, highKnowledge_pvalue,
+    lowKnowledge_meanDifference, lowKnowledge_pvalue,
+    opportunityZone_meanDifference, opportunityZone_pvalue,
+    nonOpportunityZone_meanDifference, nonOpportunityZone_pvalue]
 
 if __name__ == "__main__":
     experiment_path = 'experiment_data/'
     allData = {}
+    experimentResults = pd.DataFrame(columns=['experiment_id', 
+    'baseline_treatmenteffect', 'baseline_pvalue', 'correlation_highKnowledgeOpportunityZone', 'correlation_lowKnowledgeOpportunityZone', 
+    'highknowledge_treatmenteffect', 'highknowledge_pvalue', 
+    'lowknowledge_treatmenteffect', 'lowknowledge_pvalue',
+    'opportunityzone_treatmenteffect', 'opportunityzone_pvalue',
+    'nonopportunityzone_treatmenteffect', 'nonopportunityzone_pvalue'])
 
     #Perform tests per experiment in this loop:
     for dir in os.listdir(experiment_path):
@@ -95,9 +179,10 @@ if __name__ == "__main__":
         allData[exp_dir] = data
 
         if dir != "PSAUTWT" and dir != "PSAZ2G4":
-            per_experiment_tests(data, dir)
+            experimentResults.loc[len(experimentResults.index)] =  per_experiment_tests(data, dir)
 
     #Perform tests on all the experiments here:
     #get_percentile_data(allData)
+    experimentResults.to_csv("experimentResults.csv", index=False)
 
     
