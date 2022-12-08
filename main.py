@@ -10,6 +10,29 @@ from statsmodels.stats.weightstats import ttest_ind
 lowKnowledgeBoundary = 0.55366019
 highKnowledgeBoundary = 0.78819488
 
+FALSE_DISCOVERY_RATE = 0.05
+
+#list of pvalues for the bh procedure
+listOfBHObjects = []
+
+class BHObject:
+    def __init__(self, experimentId, columnTitle, pvalue):
+        self.experimentId = experimentId
+        self.columnTitle = columnTitle
+        self.pvalue = pvalue
+        self.procedureValue = None
+
+def computeBHProcedure():
+    global listOfBHObjects
+
+    BHProcedureTable = pd.DataFrame(columns=["experiment_id", "pvalue_type", "pvalue", "bh_procedure_value"])
+    listOfBHObjects.sort(key=lambda o: o.pvalue)
+    for i in range(len(listOfBHObjects)):
+        listOfBHObjects[i].procedureValue = ((i+1)/len(listOfBHObjects))*FALSE_DISCOVERY_RATE
+        BHProcedureTable.loc[len(BHProcedureTable.index)] =  [listOfBHObjects[i].experimentId, listOfBHObjects[i].columnTitle, listOfBHObjects[i].pvalue, listOfBHObjects[i].procedureValue]
+    
+    return BHProcedureTable
+
 def get_dependent_variable(id):
     match id:
         case "PSA59TP":
@@ -32,12 +55,8 @@ def get_dependent_variable(id):
             return "condition_problem_count"
         case "PSAYN42":
             return "posttest_correct"
-        case "PSAZ2G4":
-            return "posttest_correct"
         case _:
             return "Error name did not match"
-        
-
 
 def load_experiment(experiment_dir):
     """Load experiment csv files and convert them to pandas dataframe
@@ -61,12 +80,19 @@ def get_percentile_data(allData):
     concatFrame = pd.concat(listOfFrames, keys=['student_id', 'student_prior_average_correctness'])
     concatFrame.drop_duplicates(subset='student_id', inplace=True)
     concatFrame.dropna(inplace=True)
+    print(f"Total number of studets in experiment: {len(concatFrame)}")
     values = concatFrame['student_prior_average_correctness'].to_numpy()
     print(f"Total Experiments percentile values (0, 25, 50, 75, 100): {np.percentile(values, [0, 25, 50, 75, 100])}")
     return np.percentile(values, [0, 25, 50, 75, 100])
 
 def per_experiment_tests(data, id):
+    global listOfBHObjects
     print(id)
+
+    #For experiment PSAUTWT, we need to convert the end_time column to either a 1 or 0 depending on if it has a value (no value means not completed, value means it was completed)
+    if id == "PSAUTWT":
+        data["alogs"]["end_time"] = data["alogs"]["end_time"].apply(lambda value: 0 if pd.isnull(value) else 1)
+
     #Check choice vs no choice for all
     control = data["alogs"][data['alogs']['assigned_condition'].str.contains("Control")][get_dependent_variable(id)]
     control = control.dropna()
@@ -154,7 +180,15 @@ def per_experiment_tests(data, id):
     print(f'Mean difference Non Opportunity Zone: {nonOpportunityZone_meanDifference}')
     print(f'p-value for Non Opportunity Zone: {nonOpportunityZone_pvalue}')
 
-    #Report p-values in table
+
+    #Add pvalues to list for BH procedure
+    listOfBHObjects.append(BHObject(id, "baseline_pvalue", basline_pvalue))
+    listOfBHObjects.append(BHObject(id, "highknowledge_pvalue", highKnowledge_pvalue))
+    listOfBHObjects.append(BHObject(id, "lowknowledge_pvalue", lowKnowledge_pvalue))
+    listOfBHObjects.append(BHObject(id, "opportunityzone_pvalue", opportunityZone_pvalue))
+    listOfBHObjects.append(BHObject(id, "nonopportunityzone_pvalue", nonOpportunityZone_pvalue))
+
+    #Report date in a table
     return [id,
     baseline_meanDifference, basline_pvalue, correlation_highKnowledgeOpportunityZone, correlation_lowKnowledgeOpportunityZone,
     highKnowledge_meanDifference, highKnowledge_pvalue,
@@ -162,27 +196,31 @@ def per_experiment_tests(data, id):
     opportunityZone_meanDifference, opportunityZone_pvalue,
     nonOpportunityZone_meanDifference, nonOpportunityZone_pvalue]
 
-if __name__ == "__main__":
+def main():
     experiment_path = 'experiment_data/'
     allData = {}
     experimentResults = pd.DataFrame(columns=['experiment_id', 
     'baseline_treatmenteffect', 'baseline_pvalue', 'correlation_highKnowledgeOpportunityZone', 'correlation_lowKnowledgeOpportunityZone', 
-    'highknowledge_treatmenteffect', 'highknowledge_pvalue', 
+    'highknowledge_treatmenteffect', 'highknowledge_pvalue',
     'lowknowledge_treatmenteffect', 'lowknowledge_pvalue',
     'opportunityzone_treatmenteffect', 'opportunityzone_pvalue',
-    'nonopportunityzone_treatmenteffect', 'nonopportunityzone_pvalue'])
+    'nonopportunityzone_treatmenteffect', 'nonopportunityzone_pvalue',])
 
     #Perform tests per experiment in this loop:
     for dir in os.listdir(experiment_path):
         exp_dir = os.path.join(experiment_path, dir)
         data = load_experiment(exp_dir)
         allData[exp_dir] = data
-
-        if dir != "PSAUTWT" and dir != "PSAZ2G4":
-            experimentResults.loc[len(experimentResults.index)] =  per_experiment_tests(data, dir)
+        experimentResults.loc[len(experimentResults.index)] =  per_experiment_tests(data, dir)
 
     #Perform tests on all the experiments here:
-    #get_percentile_data(allData)
-    experimentResults.to_csv("experimentResults.csv", index=False)
+    get_percentile_data(allData)
+    print("Performing BH procedure on pvalues")
+    bhDataFrame = computeBHProcedure()
 
-    
+    print("Outputting to file")
+    experimentResults.to_csv("experimentResults.csv", index=False)
+    bhDataFrame.to_csv("bhProcedureResults.csv", index=False)
+
+if __name__ == "__main__":
+    main()
