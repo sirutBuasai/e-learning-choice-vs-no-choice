@@ -171,6 +171,19 @@ def per_experiment_tests(data, id):
     nonOpportunityZone_pvalue = ttest_ind(nonOpportunityZoneControl, nonOpportunityZoneTreatment)[1]
     nonOpportunityZone_meanDifference = np.mean(nonOpportunityZoneControl.to_numpy()) - np.mean(nonOpportunityZoneTreatment.to_numpy())
 
+    #Print number of students in each subgroup
+    print(f'Number of students in High Knowledge Control: {len(highKnowledgeControl)}')
+    print(f'Number of students in High Knowledge Treatment: {len(highKnowledgeTreatment)}')
+
+    print(f'Number of students in Low Knowledge Control: {len(lowKnowledgeControl)}')
+    print(f'Number of students in Low Knowledge Treatment: {len(lowKnowledgeTreatment)}')
+
+    print(f'Number of students in Opp. Zone Control: {len(opportunityZoneControl)}')
+    print(f'Number of students in Opp. Zone Treatment: {len(opportunityZoneTreatment)}')
+
+    print(f'Number of students in Not Opp. Zone Control: {len(nonOpportunityZoneControl)}')
+    print(f'Number of students in Not Opp. Zone Treatment: {len(nonOpportunityZoneControl)}')
+
     print(f'Mean difference for High Knowledge: {highKnowledge_meanDifference}')
     print(f'p-value for High Knowledge: {highKnowledge_pvalue}')
     print(f'Mean difference for Low Knowledge: {lowKnowledge_meanDifference}')
